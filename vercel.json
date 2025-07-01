@@ -1,14 +1,8 @@
 {
-  "functions": {
-    "api/generate.js": {
-      "memory": 1024,
-      "maxDuration": 15
-    }
-  },
   "routes": [
     {
-      "src": "/api/(.*)",
-      "dest": "/api/$1"
+      "src": "/api/generate",
+      "dest": "/api/generate.js"
     }
   ]
 }
