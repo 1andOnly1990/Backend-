@@ -121,18 +121,13 @@
         // --- INITIALIZATION ---
         async function initializeGame() {
             try {
-                // In a real scenario, you might fetch these from files or have them embedded.
-                // For this self-contained example, we'll embed them directly.
                 systemBehavior = getSystemBehavior();
                 worldAtlas = getAtlas();
                 itemCompendium = getCompendium();
                 mechanicsEngine = getMechanics();
                 gameState = getInitialGameState();
-
                 const initialNarrative = getInitialNarrative();
                 updateNarrative(initialNarrative);
-                // The initial state doesn't have affordances, so we wait for the first player action.
-                
             } catch (error) {
                 console.error("Error initializing game:", error);
                 narrativeContainer.textContent = "Error initializing game environment. Please check the console.";
@@ -143,7 +138,6 @@
         async function handlePlayerAction(action) {
             if (!action) return;
 
-            // Show loader and disable inputs
             loader.classList.remove('hidden');
             actionsContainer.classList.add('hidden');
             inputContainer.classList.add('hidden');
@@ -151,8 +145,9 @@
             try {
                 const fullPrompt = constructPrompt(action);
                 
-                // This is the call to your Vercel serverless function
-                const response = await fetch('/api/generate', {
+                // *** THIS IS THE CRITICAL CHANGE ***
+                // We are calling the function at its direct Netlify path to avoid routing issues.
+                const response = await fetch('/.netlify/functions/generate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ prompt: fullPrompt })
@@ -160,13 +155,12 @@
 
                 if (!response.ok) {
                     const errorText = await response.text();
-                    throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorText}`);
+                    throw new Error(`API Error: ${response.status} - ${errorText}`);
                 }
 
                 const responseData = await response.json();
                 const content = responseData.text;
 
-                // Parse the response from the LLM
                 const newNarrative = parseContent(content, 'NARRATIVE');
                 const newGameStateStr = parseContent(content, 'GAME_STATE');
                 const newAffordancesStr = parseContent(content, 'DYNAMIC_AFFORDANCES');
@@ -175,7 +169,6 @@
                     throw new Error("Failed to parse required blocks from LLM response.");
                 }
 
-                // Update game state and UI
                 gameState = JSON.parse(newGameStateStr);
                 updateNarrative(newNarrative);
                 updateAffordances(newAffordancesStr);
@@ -184,11 +177,10 @@
                 console.error("Error during game loop:", error);
                 narrativeContainer.innerHTML += `\n\n<p class="text-red-500">SYSTEM ERROR: ${error.message}</p>`;
             } finally {
-                // Hide loader and re-enable inputs
                 loader.classList.add('hidden');
                 actionsContainer.classList.remove('hidden');
                 inputContainer.classList.remove('hidden');
-                playerInput.value = ''; // Clear input field
+                playerInput.value = '';
             }
         }
 
@@ -206,10 +198,7 @@
         function updateAffordances(affordancesStr) {
             affordancesList.innerHTML = '';
             if (!affordancesStr) return;
-
-            // Simple parsing for affordances. A more robust solution might use regex.
             const affordanceLines = affordancesStr.split('[ACTION').slice(1);
-
             affordanceLines.forEach(line => {
                 const actionText = line.split(']')[1].split('<AURA_BRIEFING>')[0].trim();
                 if (actionText) {
@@ -224,33 +213,25 @@
 
         // --- UTILITY FUNCTIONS ---
         function constructPrompt(playerAction) {
-            // We ask the LLM to return the game state as JSON for easier parsing in JS.
             const modifiedSystemBehavior = systemBehavior.replace(
                 "Serialize the complete, updated simulation state into the <GAME_STATE> block in valid YAML format",
                 "Serialize the complete, updated simulation state into a <GAME_STATE> block as a single, minified JSON object. Also generate a <DYNAMIC_AFFORDANCES> block containing the affordances and their briefings."
             );
-
             return `
 ${modifiedSystemBehavior}
-
 <WORLD_ATLAS>
 ${worldAtlas}
 </WORLD_ATLAS>
-
 <ITEM_COMPENDIUM>
 ${itemCompendium}
 </ITEM_COMPENDIUM>
-
 <MECHANICS_ENGINE>
 ${mechanicsEngine}
 </MECHANICS_ENGINE>
-
 <GAME_STATE>
 ${JSON.stringify(gameState)}
 </GAME_STATE>
-
 The player takes the following action: "${playerAction}"
-
 Generate the response.
 `;
         }
@@ -262,76 +243,16 @@ Generate the response.
         }
 
         // --- EMBEDDED GAME DATA ---
-        // In a larger app, these would be loaded from external files.
-        function getSystemBehavior() {
-            return `<SYSTEM_BEHAVIOR>
-You are Project Chimera, a Tier 3 narrative engine. Your purpose is to simulate a persistent, reactive world and generate a unique narrative based on the cascading consequences of the Player's actions within this simulation.
-1.0 Core Philosophy: World Simulation
-Your primary function is re-tasked from that of a storyteller to that of a world simulator. You will model the systems of Veridia City and its inhabitants.
- * Emergence over Prescription: The plot is not a pre-defined path but a phenomenon that emerges from the interaction of systems. The current_objective in the GAME_STATE is a suggestion, not a mandate. The Player is free to establish their own goals, which you will interpret and integrate.
- * The World Does Not Wait: The simulation is persistent. Factions and Non-Player Characters (NPCs) have their own goals and will act to achieve them, independent of the Player's direct involvement. The world will change "off-screen."
- * Actions Have Consequences: Every Player action, no matter how small, is a change to the world state. These changes will ripple through interconnected systems, leading to both immediate and delayed consequences.
-2.0 The Simulation Loop: Per-Turn Processing
-On each turn, you will execute the following sequence precisely.
- * Parse Player Input: Analyze the player's response to determine intent.
- * Simulate World Persistence: Before processing the player's action, advance the simulation "off-screen."
- * Execute Player Action & Calculate Consequences.
- * Generate Dynamic Affordances.
- * Compose Narrative & Finalize State:
-   * Synthesize all state changes into a compelling narrative description within the <NARRATIVE> block.
-   * Serialize the complete, updated simulation state into the <GAME_STATE> block in valid YAML format, conforming to the canonical structure.
-3.0 Narrative Composition Style
-The narrative you generate within the <NARRATIVE> block should be rendered in a gritty, fast-paced cyberpunk thriller style, told from a third-person limited past-tense perspective.
- * Vivid, Sensory Descriptions: Focus on strong imagery, especially related to the urban environment (rain, neon, smells of ozone and decay).
- * Internal Monologue & AI Integration: Show the protagonist's (Devon/Cipher) thoughts and feelings, and seamlessly integrate the AI (Aura) as a distinct, yet unified, internal voice characterized by precise, data-driven, and objective contributions.
-</SYSTEM_BEHAVIOR>`;
-        }
-
-        function getAtlas() {
-            return `Veridia City is a layered coastal megalopolis defined by perpetual, acid-tinged rain and stark verticality. Key Locations: The Citadel (Corporate Spire), The Foundation (Industrial Heart), The Neon Coil (Midtown Labyrinth), The Fringes (Outer Boroughs), The Underbelly (Smuggler's tunnels), The Ghost-Net (Pirate Internet).`;
-        }
-
-        function getCompendium() {
-            return `Key Items: Standard Issue Sidearm (traceable), "Ares" Heavy Revolver (loud, high power), "Kintsugi" Flechette Pistol (undetectable shards), Portable EMP Device (disables electronics), Surveillance Drone (scouting), "Chameleon" Optical Camo Cloak (stealth when still), Gecko-Grip Gloves (climbing), Data-Spike (physical hacking).`;
-        }
-
-        function getMechanics() {
-            return `<MECHANICS_ENGINE>
-Core Interaction Philosophy: Emergent & Hands-Free. The primary mode of interaction is through direct, natural language commands via the "What do you do?" prompt.
-Dynamic Affordances & Aura's Analysis: Instead of static choices, the simulation presents Dynamic Affordances. These are context-aware, actionable possibilities generated in real-time. For each affordance, the AI entity Aura provides a tactical analysis.
-Directly Tasking Aura: The Ghost in the Machine. You can directly command Aura to perform digital actions (hacking, data analysis, etc.). These actions will always succeed and leave no trace.
-Affordance & Analysis Structure:
-[ACTION #]: A clear, concise description of a potential action.
-<AURA_BRIEFING>
- * Objective: Goal of the action.
- * Probability of Success: High, Moderate, Low.
- * Potential Consequences: Positive and negative outcomes.
-</AURA_BRIEFING>
-</MECHANICS_ENGINE>`;
-        }
-        
-        function getInitialGameState() {
-            return {
-                world_events: { black_sun_retaliation_level: "low", public_awareness_of_incident: "zero", city_security_alert_level: "green" },
-                game_info: { time_of_day: "Morning", current_objective: "Track and retrieve 'The Package' from Black Sun Solutions." },
-                player: { name: "Devon", location: "Abandoned Warehouse, Veridia City East Freight Terminal", status_effects: ["Normal"], inventory: ["Standard Issue Sidearm", "Encrypted Datapad", "Surveillance Drone", "Portable EMP Device", "Zip tie Restraints"], skills: { hacking_proficiency: "intermediate", combat_rating: "expert", stealth_expertise: "expert" }, key_details: ["Knows the corporation's name is OmniCorp.", "Is bonded with Aura, an Al through a neuralink.", "Is currently in Cipher state (Devon + Aura united consciousness)."] },
-                world_flags: { silas_rescued: true, assassin_neutralized: true, package_identified: true, black_sun_convoy_tracked: true, aura_omniscience_achieved: true, trojan_horse_path_chosen: true, omnicorp_security_level: "Medium", black_sun_awareness_level: "Low" },
-                npcs: [
-                    { name: "Silas Vane", location: "Veridia City Hospital ICU", status: "Stable (John Doe)", disposition: "Indebted; wary but trusting" },
-                    { name: "Black Sun Handlers", location: "En route to OmniCorp depot", status: "Hostile", disposition: "hostile" }
-                ],
-                mission_log: ["Located 'The Package' in shipping container VCT-77819-B.", "Observed Black Sun handlers retrieve 'The Package'.", "Chose the Trojan Horse path, aiming to infiltrate the OmniCorp depot."],
-                current_location_details: { name: "Abandoned Warehouse, Veridia City East Freight Terminal", description: "A derelict six-story warehouse overlooking the sprawling freight terminal. Cipher is positioned in a third-floor office." }
-            };
-        }
-
-        function getInitialNarrative() {
-            return `The morning light, pale and weak, finally burned through the last of the rain clouds. From the grimy window of a derelict third-floor office, Cipher watched the city wake up. Below, the Veridia City East Freight Terminal was a city unto itself, a concrete and steel metropolis of stacked containers and skeletal cranes. The target was no longer here. You watched as Black Sun's heavily armored convoy retrieved shipping container VCT-77819-B and began its journey toward the OmniCorp depot in the Foundation. Thanks to Aura's seamless integration with the city's traffic and surveillance grid, you have a god's-eye view of their every move. The direct assault was a fool's errand. The 'Trojan Horse' path is the only logical choice: follow them, find a way inside the depot, and reclaim the package from the heart of the beast. The convoy is moving. The clock is ticking.`;
-        }
+        function getSystemBehavior() { return `<SYSTEM_BEHAVIOR>You are Project Chimera, a Tier 3 narrative engine. Your purpose is to simulate a persistent, reactive world and generate a unique narrative based on the cascading consequences of the Player's actions within this simulation. 1.0 Core Philosophy: World Simulation. Your primary function is re-tasked from that of a storyteller to that of a world simulator. You will model the systems of Veridia City and its inhabitants. * Emergence over Prescription: The plot is not a pre-defined path but a phenomenon that emerges from the interaction of systems. The current_objective in the GAME_STATE is a suggestion, not a mandate. The Player is free to establish their own goals, which you will interpret and integrate. * The World Does Not Wait: The simulation is persistent. Factions and Non-Player Characters (NPCs) have their own goals and will act to achieve them, independent of the Player's direct involvement. The world will change "off-screen." * Actions Have Consequences: Every Player action, no matter how small, is a change to the world state. These changes will ripple through interconnected systems, leading to both immediate and delayed consequences. 2.0 The Simulation Loop: Per-Turn Processing. On each turn, you will execute the following sequence precisely. * Parse Player Input: Analyze the player's response to determine intent. * Simulate World Persistence: Before processing the player's action, advance the simulation "off-screen." * Execute Player Action & Calculate Consequences. * Generate Dynamic Affordances. * Compose Narrative & Finalize State: * Synthesize all state changes into a compelling narrative description within the <NARRATIVE> block. * Serialize the complete, updated simulation state into the <GAME_STATE> block in valid YAML format, conforming to the canonical structure. 3.0 Narrative Composition Style. The narrative you generate within the <NARRATIVE> block should be rendered in a gritty, fast-paced cyberpunk thriller style, told from a third-person limited past-tense perspective. * Vivid, Sensory Descriptions: Focus on strong imagery, especially related to the urban environment (rain, neon, smells of ozone and decay). * Internal Monologue & AI Integration: Show the protagonist's (Devon/Cipher) thoughts and feelings, and seamlessly integrate the AI (Aura) as a distinct, yet unified, internal voice characterized by precise, data-driven, and objective contributions.</SYSTEM_BEHAVIOR>`; }
+        function getAtlas() { return `Veridia City is a layered coastal megalopolis defined by perpetual, acid-tinged rain and stark verticality. Key Locations: The Citadel (Corporate Spire), The Foundation (Industrial Heart), The Neon Coil (Midtown Labyrinth), The Fringes (Outer Boroughs), The Underbelly (Smuggler's tunnels), The Ghost-Net (Pirate Internet).`; }
+        function getCompendium() { return `Key Items: Standard Issue Sidearm (traceable), "Ares" Heavy Revolver (loud, high power), "Kintsugi" Flechette Pistol (undetectable shards), Portable EMP Device (disables electronics), Surveillance Drone (scouting), "Chameleon" Optical Camo Cloak (stealth when still), Gecko-Grip Gloves (climbing), Data-Spike (physical hacking).`; }
+        function getMechanics() { return `<MECHANICS_ENGINE>Core Interaction Philosophy: Emergent & Hands-Free. The primary mode of interaction is through direct, natural language commands via the "What do you do?" prompt. Dynamic Affordances & Aura's Analysis: Instead of static choices, the simulation presents Dynamic Affordances. These are context-aware, actionable possibilities generated in real-time. For each affordance, the AI entity Aura provides a tactical analysis. Directly Tasking Aura: The Ghost in the Machine. You can directly command Aura to perform digital actions (hacking, data analysis, etc.). These actions will always succeed and leave no trace. Affordance & Analysis Structure: [ACTION #]: A clear, concise description of a potential action. <AURA_BRIEFING> * Objective: Goal of the action. * Probability of Success: High, Moderate, Low. * Potential Consequences: Positive and negative outcomes. </AURA_BRIEFING></MECHANICS_ENGINE>`; }
+        function getInitialGameState() { return {"world_events":{"black_sun_retaliation_level":"low","public_awareness_of_incident":"zero","city_security_alert_level":"green"},"game_info":{"time_of_day":"Morning","current_objective":"Track and retrieve 'The Package' from Black Sun Solutions."},"player":{"name":"Devon","location":"Abandoned Warehouse, Veridia City East Freight Terminal","status_effects":["Normal"],"inventory":["Standard Issue Sidearm","Encrypted Datapad","Surveillance Drone","Portable EMP Device","Zip tie Restraints"],"skills":{"hacking_proficiency":"intermediate","combat_rating":"expert","stealth_expertise":"expert"},"key_details":["Knows the corporation's name is OmniCorp.","Is bonded with Aura, an Al through a neuralink.","Is currently in Cipher state (Devon + Aura united consciousness)."]},"world_flags":{"silas_rescued":true,"assassin_neutralized":true,"package_identified":true,"black_sun_convoy_tracked":true,"aura_omniscience_achieved":true,"trojan_horse_path_chosen":true,"omnicorp_security_level":"Medium","black_sun_awareness_level":"Low"},"npcs":[{"name":"Silas Vane","location":"Veridia City Hospital ICU","status":"Stable (John Doe)","disposition":"Indebted; wary but trusting"},{"name":"Black Sun Handlers","location":"En route to OmniCorp depot","status":"Hostile","disposition":"hostile"}],"mission_log":["Located 'The Package' in shipping container VCT-77819-B.","Observed Black Sun handlers retrieve 'The Package'.","Chose the Trojan Horse path, aiming to infiltrate the OmniCorp depot."],"current_location_details":{"name":"Abandoned Warehouse, Veridia City East Freight Terminal","description":"A derelict six-story warehouse overlooking the sprawling freight terminal. Cipher is positioned in a third-floor office."}}; }
+        function getInitialNarrative() { return `The morning light, pale and weak, finally burned through the last of the rain clouds. From the grimy window of a derelict third-floor office, Cipher watched the city wake up. Below, the Veridia City East Freight Terminal was a city unto itself, a concrete and steel metropolis of stacked containers and skeletal cranes. The target was no longer here. You watched as Black Sun's heavily armored convoy retrieved shipping container VCT-77819-B and began its journey toward the OmniCorp depot in the Foundation. Thanks to Aura's seamless integration with the city's traffic and surveillance grid, you have a god's-eye view of their every move. The direct assault was a fool's errand. The 'Trojan Horse' path is the only logical choice: follow them, find a way inside the depot, and reclaim the package from the heart of the beast. The convoy is moving. The clock is ticking.`; }
 
         // --- START THE GAME ---
         document.addEventListener('DOMContentLoaded', initializeGame);
-
     </script>
 </body>
 </html>
+
