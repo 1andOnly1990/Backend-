@@ -1,7 +1,7 @@
-// This file should be placed in the /api directory of your Vercel project.
-// e.g., your-project-folder/api/generate.js
+// api/generate.js
+// This version uses the 'module.exports' syntax for maximum compatibility.
 
-export default async function handler(request, response) {
+module.exports = async (request, response) => {
   // 1. We only accept POST requests
   if (request.method !== 'POST') {
     return response.status(405).json({ message: 'Method Not Allowed' });
@@ -34,7 +34,7 @@ export default async function handler(request, response) {
       topP: 1,
       maxOutputTokens: 2048,
     },
-    safetySettings: [ // Adjust safety settings as needed for your narrative
+    safetySettings: [
         { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
         { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
         { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
@@ -66,4 +66,5 @@ export default async function handler(request, response) {
     console.error('Internal Server Error:', error);
     return response.status(500).json({ message: 'Internal Server Error', details: error.message });
   }
-}
+};
+
