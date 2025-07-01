@@ -1,7 +1,7 @@
-// api/generate.js - Netlify Function Syntax (Corrected Version)
-const fetch = require('node-fetch');
+// api/generate.js - Netlify Function Syntax (Final Corrected Version)
+// This version removes the unnecessary 'node-fetch' requirement.
 
-exports.handler = async (event) => {
+exports.handler = async (event, context) => {
   // 1. We only accept POST requests
   if (event.httpMethod !== 'POST') {
     return {
@@ -62,6 +62,15 @@ exports.handler = async (event) => {
         return {
             statusCode: geminiResponse.status,
             body: JSON.stringify({ message: 'Error from Gemini API', details: geminiData })
+        };
+    }
+    
+    // Check if candidates exist and have the expected structure
+    if (!geminiData.candidates || !geminiData.candidates[0] || !geminiData.candidates[0].content || !geminiData.candidates[0].content.parts) {
+        console.error('Unexpected response structure from Gemini API:', geminiData);
+        return {
+            statusCode: 500,
+            body: JSON.stringify({ message: 'Unexpected response structure from Gemini API' })
         };
     }
     
