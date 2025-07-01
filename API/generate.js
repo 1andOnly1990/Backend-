@@ -1,6 +1,7 @@
-// api/generate.js - Netlify Function Syntax
+// api/generate.js - Netlify Function Syntax (Corrected Version)
+const fetch = require('node-fetch');
 
-exports.handler = async (event, context) => {
+exports.handler = async (event) => {
   // 1. We only accept POST requests
   if (event.httpMethod !== 'POST') {
     return {
@@ -30,10 +31,21 @@ exports.handler = async (event, context) => {
 
     const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`;
 
-    // 4. Construct the payload
+    // 4. Construct the FULL payload for the Gemini API
     const payload = {
       contents: [{ parts: [{ text: prompt }] }],
-      // ... (generationConfig and safetySettings remain the same)
+      generationConfig: {
+        temperature: 0.7,
+        topK: 1,
+        topP: 1,
+        maxOutputTokens: 2048,
+      },
+      safetySettings: [
+          { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+          { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+      ]
     };
 
     // 5. Make the request to the Gemini API
@@ -43,16 +55,16 @@ exports.handler = async (event, context) => {
       body: JSON.stringify(payload)
     });
 
+    const geminiData = await geminiResponse.json();
+
     if (!geminiResponse.ok) {
-        const errorData = await geminiResponse.json();
-        console.error('Gemini API Error:', errorData);
+        console.error('Gemini API Error:', geminiData);
         return {
             statusCode: geminiResponse.status,
-            body: JSON.stringify({ message: 'Error from Gemini API', details: errorData })
+            body: JSON.stringify({ message: 'Error from Gemini API', details: geminiData })
         };
     }
-
-    const geminiData = await geminiResponse.json();
+    
     const responseText = geminiData.candidates[0].content.parts[0].text;
 
     // 6. Send the response back to your front-end
