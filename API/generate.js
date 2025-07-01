@@ -1,5 +1,4 @@
-// api/generate.js - Netlify Function Syntax (Final Corrected Version)
-// This version removes the unnecessary 'node-fetch' requirement.
+// api/generate.js - Netlify Function Syntax
 
 exports.handler = async (event, context) => {
   // 1. We only accept POST requests
@@ -21,7 +20,8 @@ exports.handler = async (event, context) => {
     }
 
     // 3. Get the API Key from environment variables
-    const apiKey = process.env.GEMINI_API_KEY;
+    // For Netlify, you will set this in your Netlify site settings.
+    const apiKey = process.env.GEMINI_API_KEY; 
     if (!apiKey) {
         return {
             statusCode: 500,
@@ -29,23 +29,36 @@ exports.handler = async (event, context) => {
         };
     }
 
-    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`;
+    // Use gemini-2.0-flash for text generation as per instructions
+    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
-    // 4. Construct the FULL payload for the Gemini API
+    // 4. Construct the payload
     const payload = {
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
-        temperature: 0.7,
-        topK: 1,
-        topP: 1,
-        maxOutputTokens: 2048,
+        temperature: 0.9,
+        topK: 40,
+        topP: 0.95,
+        maxOutputTokens: 1024,
       },
       safetySettings: [
-          { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-          { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-      ]
+        {
+          category: "HARM_CATEGORY_HARASSMENT",
+          threshold: "BLOCK_MEDIUM_AND_ABOVE"
+        },
+        {
+          category: "HARM_CATEGORY_HATE_SPEECH",
+          threshold: "BLOCK_MEDIUM_AND_ABOVE"
+        },
+        {
+          category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+          threshold: "BLOCK_MEDIUM_AND_ABOVE"
+        },
+        {
+          category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+          threshold: "BLOCK_MEDIUM_AND_ABOVE"
+        },
+      ],
     };
 
     // 5. Make the request to the Gemini API
@@ -55,25 +68,16 @@ exports.handler = async (event, context) => {
       body: JSON.stringify(payload)
     });
 
-    const geminiData = await geminiResponse.json();
-
     if (!geminiResponse.ok) {
-        console.error('Gemini API Error:', geminiData);
+        const errorData = await geminiResponse.json();
+        console.error('Gemini API Error:', errorData);
         return {
             statusCode: geminiResponse.status,
-            body: JSON.stringify({ message: 'Error from Gemini API', details: geminiData })
+            body: JSON.stringify({ message: 'Error from Gemini API', details: errorData })
         };
     }
-    
-    // Check if candidates exist and have the expected structure
-    if (!geminiData.candidates || !geminiData.candidates[0] || !geminiData.candidates[0].content || !geminiData.candidates[0].content.parts) {
-        console.error('Unexpected response structure from Gemini API:', geminiData);
-        return {
-            statusCode: 500,
-            body: JSON.stringify({ message: 'Unexpected response structure from Gemini API' })
-        };
-    }
-    
+
+    const geminiData = await geminiResponse.json();
     const responseText = geminiData.candidates[0].content.parts[0].text;
 
     // 6. Send the response back to your front-end
@@ -90,4 +94,3 @@ exports.handler = async (event, context) => {
     };
   }
 };
-
